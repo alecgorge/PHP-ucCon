@@ -18,72 +18,161 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 	
 class ucCon {
-	var $response = array("header", "data");
-	var $cookie;
- 
-	function sendGET($host, $URL, $cookie="", $auth="") {
+	private $response = array("header" => "", "data" => "", "status" => -1);
+	private $cookie;
+
+	private $userAgent = "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.2.3) Gecko/20100401 Firefox/3.6.3 (.NET CLR 3.5.30729)";
+ 	private $url = "";
+ 	private $auth = "";
+
+ 	public function __construct($hostOrURL = false, $URL = false) {
+ 		if(!empty($URL)) {
+ 			$this->url = $hostOrURL . $URL;
+ 		}
+ 		elseif(!empty($hostOrURL)) {
+ 			$this->url = $hostOrURL;
+ 		}
+ 	}
+
+ 	public function setUserAgent($userAgent) {
+ 		$this->userAgent = $userAgent;
+ 		return $this;
+ 	}
+
+ 	public function getUserAgent() {
+ 		return $this->userAgent;
+ 	}
+
+ 	public function setURL($hostOrURL, $URL = false) {
+ 		if(!empty($URL)) {
+ 			$this->url = $hostOrURL . $URL;
+ 		}
+ 		elseif(!empty($hostOrURL)) {
+ 			$this->url = $hostOrURL;
+ 		}
+ 		return $this;
+ 	}
+
+ 	public function getURL() {
+ 		return $this->url;
+ 	}
+
+ 	public function setAuthentication($username, $password) {
+ 		$this->auth = $username . ":" . $password;
+ 	}
+
+ 	public function getAuthentication() {
+ 		return $this->auth;
+ 	}
+
+ 	public function getResponse() {
+ 		return $this->response;
+ 	}
+
+	public function get($cookie = "") {
 		$ch = curl_init($host) or trigger_error("cURL is not installed", E_USER_ERROR);
+
 		curl_setopt($ch, CURLOPT_URL, $host.$URL);
-		if (!$cookie == "") curl_setopt($ch, CURLOPT_COOKIE, $cookie);
+
+		if (!$cookie == "") {
+			curl_setopt($ch, CURLOPT_COOKIE, $cookie);
+		}
+
 		curl_setopt($ch, CURLOPT_HEADER, 1);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_HTTPGET, 1);
-		curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.2.3) Gecko/20100401 Firefox/3.6.3 (.NET CLR 3.5.30729)");
-		if (!$auth == "") curl_setopt($ch, CURLOPT_USERPWD, $auth);
+		curl_setopt($ch, CURLOPT_USERAGENT, $this->getUserAgent());
+
+		if (!$this->auth == "") {
+			curl_setopt($ch, CURLOPT_USERPWD, $this->getAuthentication());
+		}
+
 		$response = curl_exec($ch);
-		if (curl_errno($ch)) die("Error: ".curl_error($ch));
+
+		if (curl_errno($ch)) {
+			throw new Exception("Error: ".curl_error($ch));
+		}
+
 		$a1 = explode("\r\n\r\n", $response, 2);
+
 		$this->response['header'] = $a1[0]."\r\n\r\n";
 		$this->response['data'] = $a1[1];
-		$this->cookie = $this->ParseCookie($this->response['header']);
+		$this->response['status_code'] = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+		$this->cookie = $this->parseCookie($this->response['header']);
+
+		return $this->response;
 	}
  
-	function sendPOST($host, $URL, $postData, $cookie="", $auth="") {
+	public function post($postData, $cookie="") {
 		$ch = curl_init($host) or trigger_error("cURL is not installed", E_USER_ERROR);
+
 		curl_setopt($ch, CURLOPT_URL, $host.$URL);
-		if (!$cookie == "") curl_setopt($ch, CURLOPT_COOKIE, $cookie);
+
+		if (!$cookie == "") {
+			curl_setopt($ch, CURLOPT_COOKIE, $cookie);
+		}
+
 		curl_setopt($ch, CURLOPT_HEADER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POST, 1);
-		if (!$auth == "") curl_setopt($ch, CURLOPT_USERPWD, $auth);
+
+		if (!$this->auth == "") {
+			curl_setopt($ch, CURLOPT_USERPWD, $auth);
+		}
+
 		$response = curl_exec($ch);
-		if (curl_errno($ch)) die("Error: ".curl_error($ch));
+
+		if (curl_errno($ch)) {
+			throw new Exception("Error: ".curl_error($ch));
+		}
+
 		$a1 = explode("\r\n\r\n", $response, 2);
-		$this->response['header'] = $a1[0]."\r\n";
+
+		$this->response['header'] = $a1[0]."\r\n\r\n";
 		$this->response['data'] = $a1[1];
-		$this->cookie = $this->ParseCookie($this->response['header']);
+		$this->response['status_code'] = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+		$this->cookie = $this->parseCookie($this->response['header']);
+
+		return $this->response;
 	}
  
-	function ParseCookie($header) {
-		$tempcookiename = $tempcookievalue = $cookiename = $cookievalue = Array();
+	public function parseCookie($header) {
+		$tempcookiename = $tempcookievalue = $cookiename = $cookievalue = array();
 		$cookiestr = "";
 		$a1 = explode("Set-Cookie: ", $header);
-		for ($i=1;$i<count($a1);$i++) {
-			$a2 = explode("\r\n", $a1[$i], 2);
+
+		foreach($a1 as $i => $v) {
+			$a2 = explode("\r\n", $v, 2);
 			$a3 = explode("=", $a2[0], 2);
 			$a4 = explode(";", $a3[1]);
 			$tempcookiename[count($tempcookiename)] = $a3[0];
 			$tempcookievalue[count($tempcookievalue)] = $a4[0];
 		}
+
 		if (strpos($this->cookie, ";")) {
 			$a1 = explode("; ", $this->cookie);
-			for ($i=0;$i<count($a1);$i++) {
-				$a2 = explode("=", $a1[$i]);
+			foreach($a1 as $k => $v) {
+				$a2 = explode("=", $v);
 				$tempcookiename[count($tempcookiename)] = $a2[0];
 				$a3 = explode(";", $a2[1]);
 				$tempcookievalue[count($tempcookievalue)] = $a3[0];
 			}
 		}
-		for ($i=0;$i<count($tempcookiename);$i++) {
-			if (!in_array($tempcookiename[$i], $cookiename)) {
+
+		foreach($tempcookiename as $i => $v)
+			if (!in_array($v, $cookiename)) {
 				$cookiename[count($cookiename)] = $tempcookiename[$i];
 				$cookievalue[count($cookievalue)] = $tempcookievalue[$i];
 			}
 		}
-		for ($i=0;$i<count($cookiename);$i++) {
-			$cookiestr .= $cookiename[$i]."=".$cookievalue[$i]."; ";
+
+		foreach($cookiename as $i => $v)
+			$cookiestr .= $v . "=" . $cookievalue[$i] . "; ";
 		}
+
 		return substr($cookiestr, 0, (strlen($cookiestr) - 1));
 	}
 }
